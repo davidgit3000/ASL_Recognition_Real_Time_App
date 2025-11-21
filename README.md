@@ -21,7 +21,12 @@ asl_sign_model/
 ├── app.py                          # Flask web application (dual model)
 ├── config.py                       # Central configuration
 ├── requirements.txt                # Python dependencies
-├── run_webapp.sh                   # Quick start script
+├── README.md                       # Project documentation
+├── CHANGELOG.md                    # Version history
+│
+├── shell_cmd/                      # Shell scripts
+│   ├── run_webapp.sh               # Quick start Flask app
+│   └── check_labels.sh             # Check dataset labels
 │
 ├── scripts/                        # Training & data collection
 │   ├── collect_images.py           # Collect static images (RF)
@@ -29,6 +34,7 @@ asl_sign_model/
 │   ├── add_new_sign.py             # Add signs to RF dataset
 │   ├── add_new_signs_tf.py         # Add signs to Transformer dataset
 │   ├── remove_signs.py             # Remove signs from dataset
+│   ├── check_labels.py             # Check dataset labels (Python)
 │   ├── create_dataset.py           # Process RF training data
 │   ├── train_classifier.py         # Train Random Forest
 │   ├── train_transformer_pytorch.py # Train Transformer
@@ -54,6 +60,9 @@ asl_sign_model/
 ├── static/                         # Frontend assets
 │   └── app.js                      # JavaScript (model toggle, UI)
 │
+├── docs/                           # Documentation
+│   └── DATASET_MANAGEMENT.md       # Dataset management guide
+│
 ├── data/                           # Training images
 ├── saved_predictions/              # Saved screenshots
 └── confusion_matrix/               # Model evaluation plots
@@ -77,7 +86,7 @@ pip install -r requirements.txt
 
 ```bash
 # Quick start (recommended)
-./run_webapp.sh
+./shell_cmd/run_webapp.sh
 
 # Or manually
 python app.py
@@ -234,6 +243,27 @@ python scripts/remove_signs.py "bad sign" rest
 # Retrain model after removal
 python scripts/train_transformer_pytorch.py  # or train_classifier.py
 ```
+
+---
+
+## 🔍 Check Dataset Labels
+
+View all signs in your datasets:
+
+```bash
+# Python script (detailed)
+python scripts/check_labels.py
+
+# Bash script (quick)
+./shell_cmd/check_labels.sh
+```
+
+**Output includes**:
+
+- 📊 Random Forest signs and sample counts
+- 🤖 Transformer signs and sequence counts
+- 🔄 Comparison showing common/unique signs
+- 📈 Dataset statistics
 
 ---
 
