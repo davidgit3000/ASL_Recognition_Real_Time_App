@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>🤟 ASL Sign Language Translator</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <style>
+      .gradient-bg {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+      .card {
+        backdrop-filter: blur(10px);
+        background: rgba(255, 255, 255, 0.95);
+      }
+      .confidence-high {
+        color: #10b981;
+      }
+      .confidence-medium {
+        color: #f59e0b;
+      }
+      .confidence-low {
+        color: #ef4444;
+      }
+      .confidence-unknown {
+        color: #6b7280;
+      }
+
+      #videoElement {
+        transform: scaleX(1);
+      }
+
+      .pulse-ring {
+        animation: pulse-ring 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      }
+
+      @keyframes pulse-ring {
+        0% {
+          transform: scale(0.95);
+          opacity: 1;
+        }
+        100% {
+          transform: scale(1.05);
+          opacity: 0;
+        }
+      }
+    </style>
+  </head>
+  <body class="gradient-bg min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+      <!-- Header -->
+      <div class="text-center mb-8">
+        <h1 class="text-5xl font-bold text-white mb-2">
+          🤟 ASL Sign Language Translator
+        </h1>
+        <p class="text-white text-lg opacity-90">
+          Real-time American Sign Language Detection
+        </p>
+      </div>
+
+      <!-- Main Content -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Camera Feed (Left/Center) -->
+        <div class="lg:col-span-2">
+          <div class="card rounded-2xl shadow-2xl p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-2xl font-bold text-gray-800">📹 Camera Feed</h2>
+            </div>
+
+            <!-- Video Container -->
+            <div
+              class="relative bg-gray-900 rounded-xl overflow-hidden"
+              style="aspect-ratio: 4/3"
+            >
+              <video
+                id="videoElement"
+                class="w-full h-full object-cover"
+                autoplay
+                playsinline
+              ></video>
+              <canvas
+                id="canvasElement"
+                class="absolute top-0 left-0 w-full h-full"
+              ></canvas>
+
+              <!-- Status Overlay -->
+              <div
+                id="statusOverlay"
+                class="absolute top-4 left-4 px-4 py-2 bg-black bg-opacity-60 text-white rounded-lg"
+              >
+                <span id="statusText">Initializing...</span>
+              </div>
+            </div>
+
+            <!-- Camera Controls -->
+            <div class="flex gap-3 mt-4">
+              <button
+                id="startCamera"
+                class="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+              >
+                ▶️ Start Camera
+              </button>
+              <button
+                id="stopCamera"
+                class="flex-1 px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition font-semibold"
+                disabled
+              >
+                ⏹️ Stop Camera
+              </button>
+              <button
+                id="toggleLandmarks"
+                class="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
+              >
+                <span id="landmarksText">Show Landmarks</span>
+              </button>
+            </div>
+
+            <!-- Add New Sign Button -->
+            <div class="mt-4">
+              <button
+                id="addNewSignBtn"
+                class="w-full px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition font-semibold shadow-lg"
+              >
+                ➕ Add New Sign to Dataset
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="space-y-6">
+          <!-- Current Prediction -->
+          <div class="card rounded-2xl shadow-2xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">
+              🎯 Current Prediction
+            </h2>
+            <div
+              id="predictionBox"
+              class="text-center p-6 bg-gray-100 rounded-xl"
+            >
+              <div
+                id="predictionText"
+                class="text-3xl font-bold text-gray-400 mb-2"
+              >
+                No hand detected
+              </div>
+              <div id="confidenceText" class="text-lg text-gray-500">
+                Confidence: 0.0%
+              </div>
+            </div>
+          </div>
+
+          <!-- Sentence Builder -->
+          <div class="card rounded-2xl shadow-2xl p-6">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-2xl font-bold text-gray-800">📝 Sentence</h2>
+              <button
+                id="clearSentence"
+                class="px-3 py-1 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition text-sm"
+              >
+                Clear
+              </button>
+            </div>
+            <div class="mb-2 text-xs text-gray-500 italic">
+              ✨ Signs auto-add when confidence is high (green)
+            </div>
+            <div
+              id="sentenceDisplay"
+              class="min-h-[80px] p-4 bg-gray-100 rounded-xl text-lg text-gray-700"
+            >
+              <em class="text-gray-400">Your sentence will appear here...</em>
+            </div>
+            <button
+              id="speakSentence"
+              class="w-full mt-4 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition font-semibold"
+              disabled
+            >
+              🔊 Speak Sentence
+            </button>
+          </div>
+
+          <!-- Settings -->
+          <div class="card rounded-2xl shadow-2xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">⚙️ Settings</h2>
+            <div class="space-y-3">
+              <label class="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="enableAudio"
+                  class="w-5 h-5 text-purple-600"
+                  checked
+                />
+                <span class="text-gray-700">Enable Text-to-Speech</span>
+              </label>
+              <label class="flex items-center space-x-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  id="autoSpeak"
+                  class="w-5 h-5 text-purple-600"
+                />
+                <span class="text-gray-700">Auto-speak on high confidence</span>
+              </label>
+            </div>
+          </div>
+
+          <!-- Model Info -->
+          <div class="card rounded-2xl shadow-2xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-4">📊 Model Info</h2>
+            <div class="space-y-2 text-sm text-gray-600">
+              <div class="flex justify-between">
+                <span>Status:</span>
+                <span id="modelStatus" class="font-semibold text-green-600"
+                  >Ready</span
+                >
+              </div>
+              <div class="flex justify-between">
+                <span>Known Signs:</span>
+                <span id="knownSigns" class="font-semibold">Loading...</span>
+              </div>
+              <div class="flex justify-between">
+                <span>FPS:</span>
+                <span id="fpsCounter" class="font-semibold">0</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add New Sign Modal -->
+    <div
+      id="addSignModal"
+      class="fixed inset-0 bg-black bg-opacity-50 hidden items-center justify-center z-50"
+    >
+      <div
+        class="bg-white rounded-2xl shadow-2xl p-8 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto"
+      >
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-3xl font-bold text-gray-800">➕ Add New Sign</h2>
+          <button
+            id="closeModal"
+            class="text-gray-500 hover:text-gray-700 text-3xl"
+          >
+            &times;
+          </button>
+        </div>
+
+        <!-- Step Indicator -->
+        <div class="mb-6">
+          <div class="flex items-center justify-between">
+            <div class="flex-1 text-center">
+              <div
+                id="step1Indicator"
+                class="w-10 h-10 mx-auto rounded-full bg-blue-600 text-white flex items-center justify-center font-bold"
+              >
+                1
+              </div>
+              <p class="text-sm mt-2">Enter Sign</p>
+            </div>
+            <div class="flex-1 border-t-2 border-gray-300"></div>
+            <div class="flex-1 text-center">
+              <div
+                id="step2Indicator"
+                class="w-10 h-10 mx-auto rounded-full bg-gray-300 text-white flex items-center justify-center font-bold"
+              >
+                2
+              </div>
+              <p class="text-sm mt-2">Collect Images</p>
+            </div>
+            <div class="flex-1 border-t-2 border-gray-300"></div>
+            <div class="flex-1 text-center">
+              <div
+                id="step3Indicator"
+                class="w-10 h-10 mx-auto rounded-full bg-gray-300 text-white flex items-center justify-center font-bold"
+              >
+                3
+              </div>
+              <p class="text-sm mt-2">Train Model</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 1: Enter Sign Name -->
+        <div id="step1Content" class="space-y-4">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2"
+              >Sign Name</label
+            >
+            <input
+              type="text"
+              id="signNameInput"
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              placeholder="e.g., hello, thanks, yes"
+            />
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2"
+              >Number of Images</label
+            >
+            <input
+              type="number"
+              id="numImagesInput"
+              class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none"
+              value="100"
+              min="50"
+              max="500"
+            />
+            <p class="text-xs text-gray-500 mt-1">
+              Recommended: 100-200 images
+            </p>
+          </div>
+          <button
+            id="startCollectionBtn"
+            class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+          >
+            Start Collection →
+          </button>
+        </div>
+
+        <!-- Step 2: Collect Images -->
+        <div id="step2Content" class="hidden space-y-4">
+          <div class="bg-gray-100 p-4 rounded-lg">
+            <p class="text-sm text-gray-700 mb-2">
+              📸 <strong>Instructions:</strong>
+            </p>
+            <ul class="text-sm text-gray-600 space-y-1 list-disc list-inside">
+              <li>Position your hand clearly in the camera view</li>
+              <li>Press <strong>SPACE</strong> to start capturing</li>
+              <li>Hold the sign steady while images are captured</li>
+              <li>Try different angles and lighting</li>
+            </ul>
+          </div>
+
+          <div
+            class="relative bg-gray-900 rounded-xl overflow-hidden"
+            style="aspect-ratio: 4/3"
+          >
+            <video
+              id="collectionVideo"
+              class="w-full h-full object-cover"
+              autoplay
+              playsinline
+            ></video>
+            <canvas
+              id="collectionCanvas"
+              class="absolute top-0 left-0 w-full h-full"
+            ></canvas>
+            <div
+              class="absolute top-4 left-4 px-4 py-2 bg-black bg-opacity-70 text-white rounded-lg"
+            >
+              <span id="collectionStatus">Press SPACE to start</span>
+            </div>
+            <div
+              class="absolute top-4 right-4 px-4 py-2 bg-blue-600 text-white rounded-lg font-bold"
+            >
+              <span id="imageCounter">0</span> /
+              <span id="imageTotal">100</span>
+            </div>
+          </div>
+
+          <div class="flex gap-3">
+            <button
+              id="cancelCollectionBtn"
+              class="flex-1 px-6 py-3 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition font-semibold"
+            >
+              Cancel
+            </button>
+            <button
+              id="finishCollectionBtn"
+              class="flex-1 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-semibold"
+              disabled
+            >
+              Finish Collection →
+            </button>
+          </div>
+        </div>
+
+        <!-- Step 3: Train Model -->
+        <div id="step3Content" class="hidden space-y-4">
+          <div class="text-center py-8">
+            <div
+              id="trainingSpinner"
+              class="inline-block w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-4"
+            ></div>
+            <h3 class="text-xl font-bold text-gray-800 mb-2">
+              Processing & Training Model...
+            </h3>
+            <p id="trainingStatus" class="text-gray-600">
+              Extracting features from images...
+            </p>
+            <div class="mt-4 bg-gray-200 rounded-full h-4 overflow-hidden">
+              <div
+                id="trainingProgress"
+                class="bg-blue-600 h-full transition-all duration-300"
+                style="width: 0%"
+              ></div>
+            </div>
+            <p id="trainingProgressText" class="text-sm text-gray-500 mt-2">
+              0%
+            </p>
+          </div>
+        </div>
+
+        <!-- Step 4: Success -->
+        <div id="step4Content" class="hidden space-y-4">
+          <div class="text-center py-8">
+            <div class="text-6xl mb-4">✅</div>
+            <h3 class="text-2xl font-bold text-green-600 mb-2">Success!</h3>
+            <p class="text-gray-600 mb-6">
+              New sign added and model retrained successfully!
+            </p>
+            <button
+              id="closeSuccessBtn"
+              class="px-8 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>
