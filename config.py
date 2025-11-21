@@ -32,8 +32,24 @@ CONFIDENCE_THRESHOLD_HIGH = 80  # Threshold for high confidence (green)
 CONFIDENCE_THRESHOLD_MEDIUM = 60  # Threshold for medium confidence (orange)
 CONFIDENCE_THRESHOLD_UNKNOWN = 50  # Below this threshold, classify as "Unknown sign"
 
-# Output Directories
+# Output Directories for Random Forest Model
 SAVE_DIR = "./saved_predictions"
-MODEL_PATH = "./model.pickle"
-DATA_PICKLE_PATH = "./data.pickle"
-CONFUSION_MATRIX_PATH = "./confusion_matrix.png"
+MODEL_PATH = "./models/rf_model/model.pickle"
+DATA_PICKLE_PATH = "./models/rf_model/data.pickle"
+CONFUSION_MATRIX_PATH = "./confusion_matrix/confusion_matrix.png"
+
+# Transformer Model Settings
+TRANSFORMER_MODEL_PATH = "./models/tf_model/transformer_model.pth"
+TRANSFORMER_LABEL_ENCODER_PATH = "./models/tf_model/label_encoder.pickle"
+SEQUENCES_PICKLE_PATH = "./models/tf_model/sequences.pickle"
+
+# Training settings
+EPOCHS = 50
+BATCH_SIZE = 32
+LEARNING_RATE = 0.001
+MODEL_TYPE = 'lightweight'  # 'lightweight' or 'powerful'
+
+# Sequence settings
+SEQUENCE_LENGTH = 30  # Number of frames per sequence
+FPS = 10  # Frames per second to capture
+SEQUENCES_PER_SIGN = 20  # Number of sequences to collect per sign (reduce for static signs)

@@ -10,6 +10,7 @@ let lastAddedSign = null;
 let lastAddTime = 0;
 let frameCount = 0;
 let lastFpsUpdate = Date.now();
+let currentModelType = "random_forest"; // Current model: 'random_forest' or 'transformer'
 
 // DOM elements
 const videoElement = document.getElementById("videoElement");
@@ -28,6 +29,10 @@ const enableAudioCheckbox = document.getElementById("enableAudio");
 const autoSpeakCheckbox = document.getElementById("autoSpeak");
 const knownSignsElement = document.getElementById("knownSigns");
 const fpsCounter = document.getElementById("fpsCounter");
+const modelTypeElement = document.getElementById("modelType");
+const bufferStatusElement = document.getElementById("bufferStatus");
+const toggleModelBtn = document.getElementById("toggleModelBtn");
+const resetBufferBtn = document.getElementById("resetBufferBtn");
 
 // Initialize MediaPipe Hands
 function initializeHands() {
@@ -116,7 +121,7 @@ async function getPrediction(landmarks) {
     const data = await response.json();
 
     if (data.success) {
-      updatePrediction(data.prediction, data.confidence);
+      updatePrediction(data.prediction, data.confidence, data.buffer_status);
 
       // Auto-add to sentence if high confidence (green)
       if (
@@ -127,7 +132,7 @@ async function getPrediction(landmarks) {
       ) {
         const now = Date.now();
         // Add to sentence with 1.5 second cooldown to avoid duplicates
-        if (now - lastAddTime > 1500) {
+        if (now - lastAddTime > 2000) {
           sentence.push(data.prediction);
           updateSentenceDisplay();
           lastAddedSign = data.prediction;
@@ -148,9 +153,17 @@ async function getPrediction(landmarks) {
 }
 
 // Update prediction display
-function updatePrediction(prediction, confidence) {
+function updatePrediction(prediction, confidence, bufferStatus) {
   predictionText.textContent = prediction;
   confidenceText.textContent = `Confidence: ${confidence.toFixed(1)}%`;
+
+  // Update buffer status for Transformer
+  if (bufferStatus && bufferStatusElement) {
+    bufferStatusElement.textContent = bufferStatus;
+    bufferStatusElement.parentElement.classList.remove("hidden");
+  } else if (bufferStatusElement) {
+    bufferStatusElement.parentElement.classList.add("hidden");
+  }
 
   // Update color based on confidence
   const predictionBox = document.getElementById("predictionBox");
@@ -382,10 +395,89 @@ async function loadModelInfo() {
 
     if (data.success) {
       knownSignsElement.textContent = data.num_signs;
+      currentModelType = data.model_type;
+      if (modelTypeElement) {
+        modelTypeElement.textContent =
+          data.model_type === "transformer" ? "Transformer" : "Random Forest";
+      }
+
+      // Show/hide buffer status based on model type
+      if (bufferStatusElement) {
+        if (data.model_type === "transformer") {
+          bufferStatusElement.parentElement.classList.remove("hidden");
+        } else {
+          bufferStatusElement.parentElement.classList.add("hidden");
+        }
+      }
     }
   } catch (error) {
     console.error("Error loading model info:", error);
     knownSignsElement.textContent = "Error";
+  }
+}
+
+// Toggle between models
+async function toggleModel() {
+  try {
+    const newModelType =
+      currentModelType === "random_forest" ? "transformer" : "random_forest";
+
+    const response = await fetch("/toggle_model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model_type: newModelType }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      currentModelType = data.model_type;
+      if (modelTypeElement) {
+        modelTypeElement.textContent =
+          data.model_type === "transformer" ? "Transformer" : "Random Forest";
+      }
+
+      // Show/hide buffer status
+      if (bufferStatusElement) {
+        if (data.model_type === "transformer") {
+          bufferStatusElement.parentElement.classList.remove("hidden");
+        } else {
+          bufferStatusElement.parentElement.classList.add("hidden");
+        }
+      }
+
+      // Update button text
+      if (toggleModelBtn) {
+        toggleModelBtn.textContent =
+          data.model_type === "transformer"
+            ? "🔄 Switch to Random Forest"
+            : "🔄 Switch to Transformer";
+      }
+
+      console.log(data.message);
+    } else {
+      alert("Error switching model: " + data.error);
+    }
+  } catch (error) {
+    console.error("Error toggling model:", error);
+    alert("Error switching model");
+  }
+}
+
+// Reset buffer (Transformer only)
+async function resetBuffer() {
+  try {
+    const response = await fetch("/reset_buffer", { method: "POST" });
+    const data = await response.json();
+
+    if (data.success) {
+      console.log("Buffer reset");
+      if (bufferStatusElement) {
+        bufferStatusElement.textContent = "0/30";
+      }
+    }
+  } catch (error) {
+    console.error("Error resetting buffer:", error);
   }
 }
 
@@ -408,6 +500,8 @@ stopButton.addEventListener("click", stopCamera);
 toggleLandmarksButton.addEventListener("click", toggleLandmarks);
 clearSentenceButton.addEventListener("click", clearSentence);
 speakSentenceButton.addEventListener("click", speakSentence);
+if (toggleModelBtn) toggleModelBtn.addEventListener("click", toggleModel);
+if (resetBufferBtn) resetBufferBtn.addEventListener("click", resetBuffer);
 
 // Initialize on page load
 window.addEventListener("load", () => {
@@ -468,6 +562,16 @@ addNewSignBtn.addEventListener("click", () => {
   addSignModal.classList.remove("hidden");
   addSignModal.classList.add("flex");
   resetModal();
+
+  // Show warning if Transformer is active
+  const transformerWarning = document.getElementById("transformerWarning");
+  if (transformerWarning) {
+    if (currentModelType === "transformer") {
+      transformerWarning.classList.remove("hidden");
+    } else {
+      transformerWarning.classList.add("hidden");
+    }
+  }
 });
 
 // Close modal
@@ -645,10 +749,17 @@ finishCollectionBtn.addEventListener("click", async () => {
   }
   document.removeEventListener("keydown", handleSpacePress);
 
+  // Check if Transformer model is active
+  if (currentModelType === "transformer") {
+    // Show instructions for Transformer
+    showTransformerInstructions(currentSignName);
+    return;
+  }
+
   showStep(3);
 
   try {
-    // Send images to backend
+    // Send images to backend (Random Forest only)
     trainingStatus.textContent = "Uploading images...";
     trainingProgress.style.width = "10%";
     trainingProgressText.textContent = "10%";
@@ -660,6 +771,7 @@ finishCollectionBtn.addEventListener("click", async () => {
       },
       body: JSON.stringify({
         sign_name: currentSignName,
+        model_type: currentModelType,
         images: collectedImages,
       }),
     });
@@ -685,3 +797,43 @@ finishCollectionBtn.addEventListener("click", async () => {
     showStep(1);
   }
 });
+
+// Show Transformer instructions
+function showTransformerInstructions(signName) {
+  const instructions = `
+    <div class="bg-blue-50 border-2 border-blue-300 rounded-lg p-6">
+      <h3 class="text-xl font-bold text-blue-800 mb-4">
+        🤖 Transformer Model - CLI Required
+      </h3>
+      <p class="text-gray-700 mb-4">
+        Adding signs to the Transformer model requires collecting <strong>sequences</strong> (not static images).
+        Please use the command-line tools:
+      </p>
+      
+      <div class="bg-gray-800 text-green-400 p-4 rounded-lg font-mono text-sm mb-4">
+        <p class="mb-2"># Step 1: Collect sequences for "${signName}"</p>
+        <p class="mb-2">python scripts/add_new_signs.py ${signName} --sequences 15</p>
+        <p class="mb-2"># Step 2: Retrain the model</p>
+        <p class="mb-2">python scripts/train_transformer_pytorch.py</p>
+        <p># Step 3: Restart the Flask app</p>
+      </div>
+      
+      <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+        <p class="text-sm text-yellow-800">
+          <strong>💡 Tip:</strong> Use 15-20 sequences for dynamic signs (hello, how are you) 
+          and 10 sequences for static signs (A, B, C).
+        </p>
+      </div>
+      
+      <button
+        onclick="closeModalHandler()"
+        class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition font-semibold"
+      >
+        Got it! I'll use the CLI
+      </button>
+    </div>
+  `;
+
+  step3Content.innerHTML = instructions;
+  showStep(3);
+}
